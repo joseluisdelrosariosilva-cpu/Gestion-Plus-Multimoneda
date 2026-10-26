@@ -1,0 +1,5 @@
+# Respaldos automaticos del libro: son copias generadas, no fuentes.
+/Respaldos/
+
+# Archivos de bloqueo temporales de Excel (~$libro.xlsm).
+~$*
