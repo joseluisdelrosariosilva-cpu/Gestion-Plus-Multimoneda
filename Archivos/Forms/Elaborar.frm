@@ -199,9 +199,11 @@ Private Sub Btn_Active_Click()
         
     End With
     
-      producto = Me.Recetas.Value
-      Agregar_Producto
-      Agregar_Fecha
+    Confirmar_Codigo_Producto codigoProducto
+    
+    producto = Me.Recetas.Value
+    Agregar_Producto
+    Agregar_Fecha
     
    ThisWorkbook.Sheets("Gestión de Almacén").Protect password:="theSheetProtectpassisthe011rd", userinterfaceonly:=True
     
@@ -641,9 +643,11 @@ Private Sub Elaborar_Click()
         .Range.Cells(1, 8).Value = costoPorUnidad * cantidadElaborada  ' Fondo
     End With
     
-      producto = Me.Recetas.Value
-      Agregar_Producto
-      Agregar_Fecha
+    Confirmar_Codigo_Producto codigoProducto
+    
+    producto = Me.Recetas.Value
+    Agregar_Producto
+    Agregar_Fecha
     
    ThisWorkbook.Sheets("Gestión de Almacén").Protect password:="theSheetProtectpassisthe011rd", userinterfaceonly:=True
     

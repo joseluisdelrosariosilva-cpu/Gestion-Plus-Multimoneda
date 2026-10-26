@@ -71,6 +71,8 @@ Private Sub boton_ingresar_covered_Click()
         nuevaFila.Range(14).Value = Format(ingresar_form.Ganancia_TextBox.Value, "0.00")                 ' Columna N: Ganancia
         nuevaFila.Range(15).Value = ingresar_form.Moneda_Ganancia.Value                  ' Columna O: Moneda Ganancia
         
+        Call Confirmar_Codigo_Producto(ingresar_form.codigo_TextBox.Value)
+        
         producto = ingresar_form.nombre_de_producto_TextBox.Value
         Agregar_Producto
         Agregar_Fecha
