@@ -423,7 +423,7 @@ Public Sub LimpiarTodasLasTablas()
 
     For Each ws In ThisWorkbook.Worksheets
         For Each lo In ws.ListObjects
-            VaciarTabla lo
+            LimpiarTabla lo
             tablas = tablas + 1
         Next lo
     Next ws
@@ -488,7 +488,7 @@ Private Function CopiarTabla(destLO As ListObject, srcLO As ListObject) As Boole
         End If
     Next j
 
-    VaciarTabla destLO
+    LimpiarTabla destLO
 
     If srcLO.DataBodyRange Is Nothing Then
         CopiarTabla = True
@@ -512,29 +512,6 @@ Private Function CopiarTabla(destLO As ListObject, srcLO As ListObject) As Boole
     destLO.DataBodyRange.Value = vDatos
     CopiarTabla = True
 End Function
-
-
-' Vacia una tabla SIN borrar filas de la hoja.
-'
-' Ojo: aca no se puede usar ListRow.Delete ni DataBodyRange.Delete. La hoja
-' "Fechas" tiene dos tablas arrancando en la misma fila (FechasUnicas en
-' A1:A9 y Productos_Unicos en C1:C17); borrar filas de la hoja se llevaria
-' puesta la otra tabla.
-Private Sub VaciarTabla(lo As ListObject)
-    Dim cabecera As Range
-
-    If lo.DataBodyRange Is Nothing Then Exit Sub
-
-    lo.DataBodyRange.ClearContents
-
-    ' Encoger la tabla a su fila de encabezado. Si falla, quedan filas vacias:
-    ' molestan pero no rompen nada.
-    Set cabecera = lo.HeaderRowRange
-    On Error Resume Next
-    lo.Resize cabecera
-    On Error GoTo 0
-End Sub
-
 
 Private Sub DesprotegerTodo()
     Dim ws As Worksheet
