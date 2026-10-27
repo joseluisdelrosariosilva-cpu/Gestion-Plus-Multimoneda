@@ -1,4 +1,6 @@
 Attribute VB_Name = "Módulo2"
+Private Const PASS_HOJA As String = "theSheetProtectpassisthe011rd"
+
 'macro para limpiar la base de datos y crear respaldo
 Sub new_respaldo()
 
@@ -139,7 +141,7 @@ Sub crear_respaldo()
                 ws.Shapes(i).Delete
             End If
         Next i
-        ws.Protect password:="theSheetProtectpassisthe011rd", userinterfaceonly:=True
+        ws.Protect password:="theSheetProtectpassisthe011rd", UserInterfaceOnly:=True
     Next ws
     
     wbRespaldo.Worksheets("Dashboard").Protect password:="theSheetProtectpassisthe011rd", _
@@ -147,11 +149,11 @@ Sub crear_respaldo()
         AllowFiltering:=True, _
         AllowSorting:=True, _
         AllowUsingPivotTables:=True, _
-        userinterfaceonly:=True
+        UserInterfaceOnly:=True
     
     wbRespaldo.Worksheets("Hidden").Unprotect password:="theSheetProtectpassisthe011rd"
     wbRespaldo.Worksheets("Hidden").Range("A1") = DateAdd("y", 10000, Date)
-    wbRespaldo.Worksheets("Hidden").Protect password:="theSheetProtectpassisthe011rd", userinterfaceonly:=True
+    wbRespaldo.Worksheets("Hidden").Protect password:="theSheetProtectpassisthe011rd", UserInterfaceOnly:=True
     
     wbRespaldo.Save
     wbRespaldo.Close
@@ -268,3 +270,316 @@ Sub limpiar()
     LimpiarTabla ThisWorkbook.Sheets("Fechas").ListObjects("FechasUnicas")
     LimpiarTabla ThisWorkbook.Sheets("Fechas").ListObjects("Productos_Unicos")
 End Sub
+
+' ===========================================================================
+' IMPORTAR DATOS DESDE OTRO LIBRO
+'
+' Recorre TODAS las tablas del libro actual y, para cada una, busca una tabla
+' con el mismo nombre en el libro que elijas. Si la encuentra y los
+' encabezados coinciden, REEMPLAZA el contenido local por el del origen.
+'
+' Reemplaza, no agrega. Las tablas locales que no existan en el origen no se
+' tocan. Si los encabezados o la cantidad de columnas no coinciden, esa tabla
+' se saltea y se informa al final.
+' ===========================================================================
+
+Public Sub ImportarDatosDesdeExcel()
+    Dim srcFile    As Variant
+    Dim srcWB      As Workbook
+    Dim ws         As Worksheet
+    Dim lo         As ListObject
+    Dim srcLO      As ListObject
+    Dim importadas As Long
+    Dim omitidas   As Long
+    Dim incompat   As Long
+    Dim mensaje    As String
+
+    Const TITULO As String = "Importar datos desde otro libro"
+
+    ' ---- 1. Elegir el libro origen ----
+    srcFile = Application.GetOpenFilename( _
+        FileFilter:="Libros de Excel (*.xls;*.xlsx;*.xlsm;*.xlsb), *.xls; *.xlsx; *.xlsm; *.xlsb", _
+        Title:="Selecciona el libro del cual importar los datos", _
+        MultiSelect:=False)
+
+    If srcFile = False Then Exit Sub
+    If StrComp(ThisWorkbook.FullName, CStr(srcFile), vbTextCompare) = 0 Then
+        MsgBox "Seleccionaste el mismo libro que esta abierto. Elegi otro.", _
+               vbExclamation, TITULO
+        Exit Sub
+    End If
+
+    If MsgBox("Se van a REEMPLAZAR los datos de todas las tablas locales que " & _
+              "existan tambien en el libro elegido." & vbCrLf & vbCrLf & _
+              "¿Continuar?", vbYesNo + vbQuestion, TITULO) <> vbYes Then
+        Exit Sub
+    End If
+
+    ' ---- 2. Abrir el origen sin ejecutar sus macros ----
+    On Error GoTo ErrorAbrir
+
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
+    Application.EnableEvents = False
+    Application.AutomationSecurity = msoAutomationSecurityForceDisable
+
+    Set srcWB = Workbooks.Open(Filename:=CStr(srcFile), ReadOnly:=True, UpdateLinks:=0)
+
+    On Error GoTo ErrorTrabajo
+
+    ' ---- 3. Desproteger el destino ----
+    DesprotegerTodo
+
+    ' ---- 4. Copiar tabla por tabla ----
+    For Each ws In ThisWorkbook.Worksheets
+        For Each lo In ws.ListObjects
+            Set srcLO = BuscarTabla(srcWB, lo.Name)
+
+            If srcLO Is Nothing Then
+                omitidas = omitidas + 1
+            ElseIf CopiarTabla(lo, srcLO) Then
+                importadas = importadas + 1
+            Else
+                incompat = incompat + 1
+            End If
+        Next lo
+    Next ws
+
+    ' Si trajiste el inventario de otro libro, el contador tiene que alcanzar
+    ' al codigo mas alto importado o el proximo producto lo repetiria.
+    Call Sincronizar_Contador
+
+    mensaje = "Importacion terminada." & vbCrLf & vbCrLf & _
+              "Tablas importadas: " & importadas & vbCrLf & _
+              "Tablas no encontradas en el origen: " & omitidas
+
+    If incompat > 0 Then
+        mensaje = mensaje & vbCrLf & _
+                  "Tablas con columnas distintas (no se tocaron): " & incompat
+    End If
+
+Salir:
+    On Error Resume Next
+    If Not srcWB Is Nothing Then
+        srcWB.Close SaveChanges:=False
+        Set srcWB = Nothing
+    End If
+    ProtegerTodo
+    RestaurarAplicacion
+    On Error GoTo 0
+
+    If Len(mensaje) > 0 Then MsgBox mensaje, vbInformation, TITULO
+    Exit Sub
+
+ErrorAbrir:
+    RestaurarAplicacion
+    MsgBox "No se pudo abrir el archivo:" & vbCrLf & srcFile & vbCrLf & vbCrLf & _
+           "Error: " & Err.Description, vbCritical, TITULO
+    Exit Sub
+
+ErrorTrabajo:
+    mensaje = ""
+    MsgBox "Error durante la importacion:" & vbCrLf & vbCrLf & _
+           Err.Description & vbCrLf & vbCrLf & _
+           "Revisa el libro antes de seguir usando.", vbCritical, TITULO
+    Resume Salir
+End Sub
+
+
+' ===========================================================================
+' LIMPIAR TODAS LAS TABLAS
+'
+' Deja TODAS las tablas del libro solo con su fila de encabezado.
+' Uso previsto: preparar el libro para un cliente nuevo.
+' No toca formulas, formatos, validaciones ni nombres definidos.
+' ===========================================================================
+
+Public Sub LimpiarTodasLasTablas()
+    Dim ws        As Worksheet
+    Dim lo        As ListObject
+    Dim respuesta As VbMsgBoxResult
+    Dim tablas    As Long
+    Dim mensaje   As String
+
+    Const TITULO As String = "Limpiar todas las tablas"
+
+    respuesta = MsgBox( _
+        "Esto borra TODAS las filas de TODAS las tablas del libro:" & vbCrLf & _
+        "inventario, ingredientes, recetas, ventas, facturas, gastos," & vbCrLf & _
+        "trabajadores, fechas y productos unicos." & vbCrLf & vbCrLf & _
+        "Las tablas quedan solo con los encabezados." & vbCrLf & _
+        "NO se puede deshacer. ¿Continuar?", _
+        vbYesNo + vbExclamation, TITULO)
+
+    If respuesta <> vbYes Then Exit Sub
+
+    On Error GoTo ErrorHandler
+
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
+    Application.EnableEvents = False
+
+    DesprotegerTodo
+
+    For Each ws In ThisWorkbook.Worksheets
+        For Each lo In ws.ListObjects
+            VaciarTabla lo
+            tablas = tablas + 1
+        Next lo
+    Next ws
+
+    ' Descomenta esta linea si ademas queres que el proximo producto sea Pr_00001.
+    Call Resetear_Contador_Codigos
+
+    mensaje = "Listo: " & tablas & " tablas quedaron vacias (solo encabezados)."
+
+Salir:
+    On Error Resume Next
+    ProtegerTodo
+    RestaurarAplicacion
+    On Error GoTo 0
+
+    If Len(mensaje) > 0 Then MsgBox mensaje, vbInformation, TITULO
+    Exit Sub
+
+ErrorHandler:
+    mensaje = "Se produjo un error y la limpieza quedo a medias:" & vbCrLf & vbCrLf & _
+              Err.Description & vbCrLf & vbCrLf & _
+              "Revisa el libro antes de seguir usando."
+    Resume Salir
+End Sub
+
+
+' ===========================================================================
+' AUXILIARES
+' ===========================================================================
+
+' Busca una tabla por nombre en todo el libro. Comparacion sin distinguir
+' mayusculas: VBA compara texto como binario y "INVENTARIO" <> "Inventario".
+Private Function BuscarTabla(wb As Workbook, nombre As String) As ListObject
+    Dim ws As Worksheet
+    Dim lo As ListObject
+
+    For Each ws In wb.Worksheets
+        For Each lo In ws.ListObjects
+            If StrComp(lo.Name, nombre, vbTextCompare) = 0 Then
+                Set BuscarTabla = lo
+                Exit Function
+            End If
+        Next lo
+    Next ws
+End Function
+
+
+' Reemplaza el contenido de destLO con el de srcLO.
+' Devuelve False si las dos tablas no tienen las mismas columnas en el mismo
+' orden, para no escribir datos en columnas equivocadas.
+Private Function CopiarTabla(destLO As ListObject, srcLO As ListObject) As Boolean
+    Dim vDatos As Variant
+    Dim i As Long
+    Dim j As Long
+
+    If srcLO.ListColumns.Count <> destLO.ListColumns.Count Then Exit Function
+
+    For j = 1 To srcLO.ListColumns.Count
+        If StrComp(Trim$(srcLO.ListColumns(j).Name), _
+                   Trim$(destLO.ListColumns(j).Name), vbTextCompare) <> 0 Then
+            Exit Function
+        End If
+    Next j
+
+    VaciarTabla destLO
+
+    If srcLO.DataBodyRange Is Nothing Then
+        CopiarTabla = True
+        Exit Function
+    End If
+
+    vDatos = srcLO.DataBodyRange.Value
+
+    ' Con una sola fila y una sola columna Excel devuelve un escalar, no una matriz.
+    If Not IsArray(vDatos) Then
+        destLO.ListRows.Add
+        destLO.DataBodyRange.Value = vDatos
+        CopiarTabla = True
+        Exit Function
+    End If
+
+    For i = 1 To UBound(vDatos, 1)
+        destLO.ListRows.Add
+    Next i
+
+    destLO.DataBodyRange.Value = vDatos
+    CopiarTabla = True
+End Function
+
+
+' Vacia una tabla SIN borrar filas de la hoja.
+'
+' Ojo: aca no se puede usar ListRow.Delete ni DataBodyRange.Delete. La hoja
+' "Fechas" tiene dos tablas arrancando en la misma fila (FechasUnicas en
+' A1:A9 y Productos_Unicos en C1:C17); borrar filas de la hoja se llevaria
+' puesta la otra tabla.
+Private Sub VaciarTabla(lo As ListObject)
+    Dim cabecera As Range
+
+    If lo.DataBodyRange Is Nothing Then Exit Sub
+
+    lo.DataBodyRange.ClearContents
+
+    ' Encoger la tabla a su fila de encabezado. Si falla, quedan filas vacias:
+    ' molestan pero no rompen nada.
+    Set cabecera = lo.HeaderRowRange
+    On Error Resume Next
+    lo.Resize cabecera
+    On Error GoTo 0
+End Sub
+
+
+Private Sub DesprotegerTodo()
+    Dim ws As Worksheet
+
+    On Error Resume Next
+    desprotegerLibro
+    For Each ws In ThisWorkbook.Worksheets
+        ws.Unprotect password:=PASS_HOJA
+    Next ws
+    On Error GoTo 0
+End Sub
+
+
+Private Sub ProtegerTodo()
+    Dim ws As Worksheet
+
+    On Error Resume Next
+    For Each ws In ThisWorkbook.Worksheets
+        ProtegerHoja ws
+    Next ws
+    protegerLibro
+    On Error GoTo 0
+End Sub
+
+
+' El Dashboard tiene permisos extra (filtrar, ordenar, tablas dinamicas).
+' Si se lo protege con la llamada generica, el usuario los pierde.
+Private Sub ProtegerHoja(ws As Worksheet)
+    If ws.Name = "Dashboard" Then
+        ws.Protect password:=PASS_HOJA, contents:=True, _
+                   AllowFiltering:=True, _
+                   AllowSorting:=True, _
+                   AllowUsingPivotTables:=True, _
+                   UserInterfaceOnly:=True
+    Else
+        ws.Protect password:=PASS_HOJA, UserInterfaceOnly:=True
+    End If
+End Sub
+
+
+Private Sub RestaurarAplicacion()
+    Application.ScreenUpdating = True
+    Application.Calculation = xlCalculationAutomatic
+    Application.EnableEvents = True
+    Application.AutomationSecurity = msoAutomationSecurityByUI
+    Application.CutCopyMode = False
+End Sub
+

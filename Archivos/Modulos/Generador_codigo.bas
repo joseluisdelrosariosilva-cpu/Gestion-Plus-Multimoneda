@@ -36,6 +36,17 @@ Public Function Codigo_Disponible(codigo As String) As Boolean
     Codigo_Disponible = Not Existe_Codigo(Tabla_Inventario(), codigo)
 End Function
 
+' --- 5. RESETEAR (SOLO para preparar un libro nuevo) -----------------------
+' Deshace a proposito la garantia de "el codigo nunca se recicla": deja el
+' contador en 0, asi el proximo producto vuelve a Pr_00001.
+' Llamalo SOLO despues de vaciar la tabla INVENTARIO.
+Public Sub Resetear_Contador_Codigos()
+    If Guardar_Ultimo_Numero(0) Then Exit Sub
+
+    MsgBox "No se pudo reiniciar el contador de codigos en la hoja oculta """ & _
+           HOJA_OCULTA & """ (celda " & CELDA_ULTIMO_CODIGO & ")." & vbCrLf & vbCrLf & _
+           "Revise la proteccion de la hoja.", vbExclamation, "Generador de codigos"
+End Sub
 
 ' ===========================================================================
 ' LOGICA INTERNA
@@ -179,13 +190,13 @@ Private Function Guardar_Ultimo_Numero(numero As Long) As Boolean
     ws.Unprotect password:=PASS_HOJA_OCULTA
     ws.Range(CELDA_ULTIMO_CODIGO).NumberFormat = "0"
     ws.Range(CELDA_ULTIMO_CODIGO).Value = numero
-    ws.Protect password:=PASS_HOJA_OCULTA, userinterfaceonly:=True
+    ws.Protect password:=PASS_HOJA_OCULTA, UserInterfaceOnly:=True
     
     Guardar_Ultimo_Numero = True
     Exit Function
 Fallo:
     On Error Resume Next
-    If Not ws Is Nothing Then ws.Protect password:=PASS_HOJA_OCULTA, userinterfaceonly:=True
+    If Not ws Is Nothing Then ws.Protect password:=PASS_HOJA_OCULTA, UserInterfaceOnly:=True
     Guardar_Ultimo_Numero = False
 End Function
 
