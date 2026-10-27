@@ -135,7 +135,7 @@ End Sub
 ' Función auxiliar para mostrar mensaje con resultados
 Private Sub MostrarMensajeResultados(tieneInicio As Boolean, tieneFin As Boolean, _
                                      fechaInicio As Date, fechaFin As Date, _
-                                     descripcion As String, Cantidad As Integer)
+                                     descripcion As String, cantidad As Integer)
     
     Dim mensaje As String
     
@@ -154,7 +154,7 @@ Private Sub MostrarMensajeResultados(tieneInicio As Boolean, tieneFin As Boolean
         mensaje = mensaje & " con descripción: '" & descripcion & "'"
     End If
     
-    Me.lblMensaje.Caption = mensaje & " (" & Cantidad & " registros)"
+    Me.lblMensaje.Caption = mensaje & " (" & cantidad & " registros)"
 End Sub
 
 ' Función auxiliar para mostrar mensaje sin resultados
@@ -216,37 +216,62 @@ Private Sub UserForm_Initialize()
 
 End Sub
 
-' Versión más simple de cargar descripciones (sin ordenar)
+' Version mas simple de cargar descripciones (sin ordenar)
 Private Sub CargarDescripcionesUnicas()
     Dim ws As Worksheet
     Dim tbl As ListObject
     Dim fila As ListRow
     Dim dict As Object
     Dim descripcion As String
-    
+    Dim clave As String
+
     If Me.Txt_Descripcion Is Nothing Then Exit Sub
-    
+
     Set ws = ThisWorkbook.Sheets("Historial de Gastos")
     Set tbl = ws.ListObjects("Gastos")
     Set dict = CreateObject("Scripting.Dictionary")
-    
-    ' Limpiar combobox
+
     Me.Txt_Descripcion.Clear
-    Me.Txt_Descripcion.AddItem "" ' Opción vacía para no filtrar
-    
-    ' Recorrer tabla y agregar descripciones únicas
+    Me.Txt_Descripcion.AddItem "" ' Opcion vacia para no filtrar
+
     For Each fila In tbl.ListRows
         descripcion = Trim(CStr(fila.Range(3).Value))
-        
-        If descripcion <> "" And Not dict.Exists(descripcion) Then
-            dict.Add descripcion, descripcion
-            Me.Txt_Descripcion.AddItem descripcion
+        clave = NormalizarDescripcion(descripcion)
+
+        If clave <> "" And Not dict.Exists(clave) Then
+            dict.Add clave, clave
+            Me.Txt_Descripcion.AddItem clave
         End If
     Next fila
-    
-    ' Establecer valor por defecto
+
     Me.Txt_Descripcion.ListIndex = 0
-    
+
     Set dict = Nothing
 End Sub
 
+' Un producto aparece como "Refresco" cuando se vendio y como
+' "Refresco x 10" cuando se saco por merma. En el combo se muestran los dos
+' como "Refresco" para no repetir el mismo producto una vez por cantidad.
+' La busqueda es por coincidencia parcial, asi que elegir "Refresco"
+' devuelve todas sus filas, con y sin cantidad.
+Private Function NormalizarDescripcion(ByVal valor As String) As String
+    Dim texto As String
+    Dim pos As Long
+    Dim sufijo As String
+
+    texto = Trim$(valor)
+    pos = InStrRev(texto, " x ")
+
+    If pos = 0 Then
+        NormalizarDescripcion = texto
+        Exit Function
+    End If
+
+    sufijo = Trim$(Mid$(texto, pos + 3))
+
+    If sufijo <> "" And IsNumeric(sufijo) Then
+        NormalizarDescripcion = Trim$(Left$(texto, pos - 1))
+    Else
+        NormalizarDescripcion = texto
+    End If
+End Function
