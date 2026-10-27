@@ -1,5 +1,9 @@
 # Respaldos automaticos del libro: son copias generadas, no fuentes.
 /Respaldos/
 
+# Libros binarios de Excel. El codigo fuente vive en Archivos/**/*.bas|frm|cls
+# y se exporta desde el editor de VBA; los .xlsm son artefactos de compilacion.
+*.xlsm
+
 # Archivos de bloqueo temporales de Excel (~$libro.xlsm).
 ~$*
